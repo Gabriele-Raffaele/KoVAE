@@ -18,11 +18,12 @@ import pathlib
 
 PROJECT_DIR = pathlib.Path(__file__).resolve().parent.parent
 
-
+# Converts a NumPy array to a PyTorch FloatTensor
 def to_tensor(data):
     return torch.from_numpy(data).float()
 
-
+# Applies Min-Max normalization to scale each feature of the dataset to the range [0, 1]
+# Adds a small epsilon (1e-7) in the denominator to avoid division by zero
 def MinMaxScaler(data):
     """Min Max normalizer.
 
@@ -37,7 +38,9 @@ def MinMaxScaler(data):
     norm_data = numerator / (denominator + 1e-7)
     return norm_data
 
-
+# Generates non-linear pendulum trajectories using the exact analytical solution
+# for various initial angles. Adds Gaussian noise and applies Min-Max scaling.
+# Returns a dataset of noisy pendulum oscillations.
 def pendulum_nonlinear(num_points, noise, theta=2.4):
     from matplotlib import pylab as plt
     from scipy.special import ellipj, ellipk
@@ -71,7 +74,9 @@ def pendulum_nonlinear(num_points, noise, theta=2.4):
     X = MinMaxScaler(X)
 
     return X
-
+# Generates synthetic sine wave time-series data.
+# For each sample and each dimension, draws a random frequency and phase,
+# constructs a sine wave of length `seq_len`, and scales it to [0, 1].
 def sine_data_generation(no, seq_len, dim):
     """Sine datasets generation.
 
@@ -109,7 +114,13 @@ def sine_data_generation(no, seq_len, dim):
 
     return data
 
-
+# Loads and preprocesses real-world datasets ('stock', 'energy', or 'metro').
+# Steps:
+# - Loads the CSV file
+# - Reverses the data to chronological order
+# - Applies Min-Max normalization
+# - Segments into sequences of length `seq_len`
+# - Shuffles the dataset to remove time correlation
 def real_data_loading(data_name, seq_len):
     """Load and preprocess real-world datasets.
 
@@ -149,7 +160,18 @@ def real_data_loading(data_name, seq_len):
 
     return data
 
+# PyTorch Dataset class for loading irregularly-sampled time-series data.
+# Supports loading cached preprocessed data or generating it on-the-fly
+# with missing values injected according to `missing_rate`.
 
+# If data is already cached in the specified folder, loads the tensors.
+# Otherwise:
+# - Loads and normalizes the raw dataset
+# - Simulates missing values by randomly setting a fraction of rows to NaN
+# - Adds a time feature
+# - Segments into sequences
+# - Computes natural cubic spline coefficients for use with Neural CDEs
+# - Saves the processed dataset for reuse
 class TimeDataset_irregular(torch.utils.data.Dataset):
     def __init__(self, seq_len, data_name, missing_rate=0.0):
         SEED = 56789
@@ -232,6 +254,10 @@ class TimeDataset_irregular(torch.utils.data.Dataset):
             self.samples = np.array(self.samples)
             self.size = len(self.samples)
 
+    # Returns a single training sample:
+    # - data: the input sequence with potential missing values
+    # - inter: spline interpolation coefficients for CDEs
+    # - original_data: the clean, unperturbed sequence
     def __getitem__(self, index):
         batch_coeff = (self.train_coeffs[0][index].float(),
                        self.train_coeffs[1][index].float(),
@@ -241,11 +267,12 @@ class TimeDataset_irregular(torch.utils.data.Dataset):
         self.sample = {'data': self.samples[index], 'inter': batch_coeff, 'original_data': self.original_sample[index]}
 
         return self.sample  # self.samples[index]
-
+    # Returns the number of sequences in the dataset
     def __len__(self):
         return len(self.samples)
 
-
+# Loads all `.pt` tensor files from the specified directory into a dictionary
+# Each key corresponds to the file name (without extension), and value is the loaded tensor
 def load_data(dir):
     tensors = {}
     for filename in os.listdir(dir):
@@ -254,7 +281,8 @@ def load_data(dir):
             tensor_value = torch.load(str(dir / filename))
             tensors[tensor_name] = tensor_value
     return tensors
-
+# Saves each tensor in the provided dictionary as a separate `.pt` file
+# Keys become the filenames, and values are saved as PyTorch tensors
 def save_data(dir, **tensors):
     for tensor_name, tensor_value in tensors.items():
         torch.save(tensor_value, str(dir / tensor_name) + '.pt')
