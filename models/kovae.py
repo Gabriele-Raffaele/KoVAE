@@ -5,7 +5,8 @@ import models.losses as losses
 from models.neuralCDE import NeuralCDE
 from models.modules import FinalTanh
 
-
+# Applies the reparameterization trick to sample from a Gaussian with given mean and log-variance
+# If random_sampling is False, returns the mean (deterministic output)
 def reparameterize(mean, logvar, random_sampling=True):
     # Reparametrization occurs only if random sampling is set to true, otherwise mean is returned
     if random_sampling is True:
@@ -16,8 +17,11 @@ def reparameterize(mean, logvar, random_sampling=True):
     else:
         return mean
 
-
+# Encoder for irregular time-series using Neural Controlled Differential Equations (Neural CDE)
+# followed by a bidirectional GRU to capture temporal features
 class VKEncoderIrregular(nn.Module):
+    # BatchNorm is applied on concatenated bidirectional outputs if enabled
+    # NeuralCDE uses a learnable ODE function to model latent trajectories from irregular data
     def __init__(self, args):
         super(VKEncoderIrregular, self).__init__()
         self.args = args
@@ -36,7 +40,9 @@ class VKEncoderIrregular(nn.Module):
         self.rnn = nn.GRU(input_size=self.hidden_dim, hidden_size=self.hidden_dim, bidirectional=True,
                            num_layers=1, batch_first=True)
 
-
+    # h: encoded temporal features from NeuralCDE
+    # h is passed through a bidirectional GRU
+    # BatchNorm is applied along the feature dimension (permute used to match expected input shape)
     def forward(self, time, train_coeffs, final_index):
         # encode
         h = self.emb(time, train_coeffs, final_index)
@@ -46,7 +52,8 @@ class VKEncoderIrregular(nn.Module):
             h = torch.permute(h, (0, 2, 1))  # permute back to b x s x c
         return h
 
-
+# Simpler encoder for regularly sampled sequences, without NeuralCDE
+# Uses only a bidirectional GRU and optional BatchNorm
 class VKEncoder(nn.Module):
     def __init__(self, args, num_layers=3):
         super(VKEncoder, self).__init__()
@@ -61,7 +68,8 @@ class VKEncoder(nn.Module):
 
         self.rnn = nn.GRU(input_size=self.inp_dim, hidden_size=self.hidden_dim, bidirectional=True,
                            num_layers=args.num_layers, batch_first=True)
-
+    # Encodes input sequence into a latent representation using GRU
+    # BatchNorm applied similarly as in the irregular version
     def forward(self, x):
         # encode
         h, _ = self.rnn(x)  # b x seq_len x channels
@@ -70,7 +78,7 @@ class VKEncoder(nn.Module):
             h = torch.permute(h, (0, 2, 1))  # permute back to b x s x c
         return h
 
-
+# Decoder that reconstructs input from latent z using a bidirectional GRU and a final linear + sigmoid
 class VKDecoder(nn.Module):
     def __init__(self, args):
         super(VKDecoder, self).__init__()
@@ -84,15 +92,21 @@ class VKDecoder(nn.Module):
 
         self.linear = nn.Linear(self.args.hidden_dim * 2, self.args.inp_dim)
 
-
+    # z is decoded through GRU and projected back to input space using sigmoid activation
     def forward(self, z):
         # decode
         h, _ = self.rnn(z)
         x_hat = nn.functional.sigmoid(self.linear(h))
         return x_hat
 
-
+# Main KoVAE model: variational autoencoder for sequential data with temporal dynamics
+# Supports both regular and irregular sequences
 class KoVAE(nn.Module):
+    # Choose encoder type based on whether missing values are present
+    # Decoder reconstructs sequences from latent representations
+    # Prior for latent content is modeled using a GRUCell (acts like an autoregressive prior)
+    # Linear layers map GRU hidden state to mean and logvar of prior
+    # Posterior (recognition model) also maps encoded GRU output to mean and logvar
     def __init__(self, args):
         super(KoVAE, self).__init__()
         self.args = args
@@ -122,7 +136,11 @@ class KoVAE(nn.Module):
 
         self.names = ['total', 'rec', 'kl', 'pred_prior']
 
-
+    # Forward pass through the VAE
+    # Encoding step: choose encoder type based on input
+    # Posterior sampling using reparameterization trick
+    # Sample prior using GRU-based autoregressive model
+    # Decode the posterior sample to reconstruct the input
     def forward(self, x, time=None, final_index=None):
 
         # ------------- ENCODING PART -------------
@@ -146,7 +164,11 @@ class KoVAE(nn.Module):
         x_rec = self.decoder(z_post)
 
         return x_rec, Z_enc, Z_enc_prior
-
+    
+    # Computes a linear operator Ct such that z_future ≈ Ct @ z_past
+    # Solves the linear regression problem either using pseudoinverse or QR decomposition
+    # Predicts latent sequence forward in time using Ct
+    # Computes cumulative prediction error over multiple future steps
     def compute_operator_and_pred(self, z):
         z_past, z_future = z[:, :-1], z[:, 1:]  # split latent
 
@@ -171,6 +193,11 @@ class KoVAE(nn.Module):
 
         return Ct, z_pred, err
 
+
+    # Computes total loss as weighted sum of reconstruction error, KL divergence, and prior prediction error
+    # recon: mean squared error between input and reconstruction
+    # kl: KL divergence between posterior and prior
+    # pred_err_prior: how well the prior GRU predicts future latent states
     def loss(self, x, x_rec, Z_enc, Z_enc_prior):
         """
         :param x: The original sequence input
@@ -212,7 +239,7 @@ class KoVAE(nn.Module):
         agg_losses = [loss] + agg_losses
         return tuple(agg_losses)
 
-
+    # Samples synthetic data from learned latent prior and decodes it
     def sample_data(self, n_sample):
         # sample from prior
         z_mean_prior, z_logvar_prior, z_out = self.sample_prior(n_sample, self.seq_len, random_sampling=True)
@@ -220,6 +247,8 @@ class KoVAE(nn.Module):
         return x_rec
 
     # ------ sample z purely from learned LSTM prior with arbitrary seq ------
+    # Samples a sequence of latent variables from the learned prior GRU
+    # At each time step, updates hidden state and samples new z_t from predicted mean and logvar
     def sample_prior(self, n_sample, seq_len, random_sampling=True):
 
         batch_size = n_sample
@@ -243,7 +272,7 @@ class KoVAE(nn.Module):
             z_logvars[:, i] = z_logvar_t
 
         return z_means, z_logvars, z_out
-
+    # Initializes zero tensors for prior samples, means, and logvars
     def zeros_init(self, batch_size, seq_len):
         z_out = torch.zeros(batch_size, seq_len, self.z_dim).cuda()
         z_means = torch.zeros(batch_size, seq_len, self.z_dim).cuda()

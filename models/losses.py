@@ -1,7 +1,8 @@
 import torch
 import torch.nn.functional as F
 
-
+# Computes the KL divergence between two diagonal Gaussian distributions:
+# one representing the posterior and one the prior.
 def kl_loss(z_post_mean, z_post_logvar, z_prior_mean, z_prior_logvar):
     # COMPUTE KL DIV
     z_post_var = torch.exp(z_post_logvar)
@@ -10,7 +11,11 @@ def kl_loss(z_post_mean, z_post_logvar, z_prior_mean, z_prior_logvar):
                    ((z_post_var + torch.pow(z_post_mean - z_prior_mean, 2)) / z_prior_var) - 1)
     return kld_z
 
-
+# Computes an eigenvalue regularization loss on the prior transition matrix.
+# Encourages the largest eigenvalues to be close to 1, depending on the selected mode:
+# - mode '2': top 2 eigenvalues
+# - mode '3': top 3 eigenvalues
+# - mode '4': all eigenvalues
 def eig_loss(Ct_prior, mode):
     # COMPUTE EIG PENALTY:
     eigs = torch.abs(torch.linalg.eigvals(Ct_prior))
@@ -28,7 +33,11 @@ def eig_loss(Ct_prior, mode):
 
     return eig_loss_prior
 
-
+# Extracts and compares the eigenvalues of the posterior and prior transition matrices.
+# Splits them into two groups:
+# - a portion expected to be close to 1 (top 50%)
+# - the rest expected to be less than 1
+# Returns both groups and a tensor of ones for loss computation.
 def eigen_constraints(Ct_post, Ct_prior):
     eig_post = torch.abs(torch.linalg.eigvals(Ct_post))
     eig_prior = torch.abs(torch.linalg.eigvals(Ct_prior))

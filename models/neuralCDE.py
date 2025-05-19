@@ -2,7 +2,10 @@ import torch
 from torchdiffeq import odeint
 import controldiffeq
 
-
+# Converts a continuous hidden state z (containing both input and hidden parts)
+# into a vector field suitable for Neural CDE integration.
+# Clamps the hidden state to [-1, 1] to promote stability during ODE solving.
+# Uses a base matrix 'out_base' to construct the output tensor by inserting model outputs.
 class ContinuousRNNConverter(torch.nn.Module):
     def __init__(self, input_channels, hidden_channels, model):
         super(ContinuousRNNConverter, self).__init__()
@@ -20,6 +23,10 @@ class ContinuousRNNConverter(torch.nn.Module):
     def extra_repr(self):
         return "input_channels: {}, hidden_channels: {}".format(self.input_channels, self.hidden_channels)
 
+    # Splits input z into observed inputs x and hidden state h.
+    # Clamps h to keep it in a stable range.
+    # Passes x and h through the model to compute the derivative of the hidden state.
+    # Constructs the full vector field output combining identity for input channels and model output for hidden channels.
     def forward(self, z):
         # z is a tensor of shape (..., input_channels + hidden_channels)
         x = z[..., :self.input_channels]
@@ -37,7 +44,11 @@ class ContinuousRNNConverter(torch.nn.Module):
         out[..., self.input_channels:, 0] = model_out
         return out
 
-
+# Implements a Neural Controlled Differential Equation model.
+# Models latent trajectories z_t evolving according to the integral equation:
+#   z_t = z_t0 + ∫ f(z_s) dX_s
+# where X is the input path defined by data, and f is a learned vector field.
+# After integrating to final time, applies a linear layer + activation to produce output.
 class NeuralCDE(torch.nn.Module):
     """A Neural CDE model. Provides a wrapper around the lower-level cdeint function, to get a flexible Neural CDE
     model.
@@ -51,7 +62,17 @@ class NeuralCDE(torch.nn.Module):
 
     It's known that linear functions on CDEs are universal approximators, so this is a very general type of model.
     """
-
+    # Initializes NeuralCDE with:
+    # - func: the learned vector field function f
+    # - input_channels: number of channels in input path X
+    # - hidden_channels: dimension of latent state z_t
+    # - output_channels: number of output channels after decoding
+    # - initial: whether to automatically construct initial state z0 from data or expect it as input during forward()
+    #
+    # If func is a ContinuousRNNConverter, adjusts hidden_channels accordingly.
+    # If initial=True and func not ContinuousRNNConverter, defines a linear network to produce z0 from input.
+    # Defines a final linear layer mapping from hidden_channels to output_channels.
+    # Uses sigmoid as activation for output.
     def __init__(self, func, input_channels, hidden_channels, output_channels, initial=True):
         """
         Arguments:
@@ -85,7 +106,22 @@ class NeuralCDE(torch.nn.Module):
         return "input_channels={}, hidden_channels={}, output_channels={}, initial={}" \
                "".format(self.input_channels, self.hidden_channels,
                          self.output_channels, self.initial)
+    
+    # Executes the forward pass through the Neural CDE.
+    # Arguments:
+    # - times: sequence of time points where the input path X is defined
+    # - coeffs: spline coefficients describing X for interpolation
+    # - final_index: tensor indicating the final time index for each batch element (for variable-length sequences)
+    # - z0: optional initial latent state; if None, will be computed if 'initial' flag is True
+    # - stream: whether to return outputs at all time points (True) or only at final times (False)
 
+    # Steps:
+    # 1. Constructs a natural cubic spline interpolant from input data.
+    # 2. Initializes z0 either from input or via a learned initial network.
+    # 3. Determines time points to solve the CDE on, depending on stream and final_index.
+    # 4. Uses an ODE solver (default 'rk4') to integrate the CDE from z0 over chosen time points.
+    # 5. Returns the latent path z_t at all times if stream=True, otherwise only at final times.
+    # 6. Applies a linear layer and sigmoid activation to latent output to get final predictions.
     def forward(self, times, coeffs, final_index, z0=None, stream=True, **kwargs):
         """
         Arguments:
