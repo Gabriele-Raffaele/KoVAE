@@ -4,7 +4,8 @@ import logging
 import torch
 import tensorflow as tf
 
-
+# Splits both original and synthetic datasets into training and test sets.
+# Randomly shuffles data and applies the same train/test ratio to both real and generated sequences.
 def train_test_divide(data_x, data_x_hat, data_t, data_t_hat, train_rate=0.8):
     """Divide train and test datasets for both original and synthetic datasets.
 
@@ -39,7 +40,8 @@ def train_test_divide(data_x, data_x_hat, data_t, data_t_hat, train_rate=0.8):
 
     return train_x, train_x_hat, test_x, test_x_hat, train_t, train_t_hat, test_t, test_t_hat
 
-
+# Extracts sequence lengths from a list of time-series arrays.
+# Also returns the maximum sequence length across all samples.
 def extract_time(data):
     """Returns Maximum sequence length and each sequence length.
 
@@ -58,7 +60,8 @@ def extract_time(data):
 
     return time, max_seq_len
 
-
+# Randomly selects a mini-batch of time-series sequences and their corresponding time lengths.
+# Returns the batch data and time information.
 def batch_generator(data, time, batch_size):
     """Mini-batch generator.
 
@@ -80,7 +83,8 @@ def batch_generator(data, time, batch_size):
 
     return X_mb, T_mb
 
-
+# Saves model and optimizer state dictionaries to a checkpoint file using PyTorch.
+# Only the model state is used for restoration in this codebase.
 def save_checkpoint(ckpt_dir, state):
   import torch
   saved_state = {
@@ -88,7 +92,8 @@ def save_checkpoint(ckpt_dir, state):
     'model': state['model'].state_dict(),
   }
   torch.save(saved_state, ckpt_dir)
-
+# Restores the model state from a checkpoint file.
+# If the checkpoint file is not found, logs a warning and returns the input state unchanged.
 def restore_checkpoint(ckpt_dir, state, device='cuda:0'):
   if not os.path.exists(ckpt_dir):
       os.makedirs(os.path.dirname(ckpt_dir), exist_ok=True)
@@ -101,11 +106,12 @@ def restore_checkpoint(ckpt_dir, state, device='cuda:0'):
       state['model'].load_state_dict(loaded_state['model'], strict=False)
       return state
 
-
+# Converts a PyTorch tensor to a NumPy array, detaching it from the computation graph.
 def t_to_np(x):
     return x.detach().cpu().numpy()
 
-
+# Sets seeds for PyTorch, NumPy, and TensorFlow to ensure reproducibility.
+# Also selects CUDA device if available, otherwise falls back to CPU.
 def set_seed_device(seed):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
@@ -120,14 +126,16 @@ def set_seed_device(seed):
     else:
         device = torch.device("cpu")
     return device
-
+# Aggregates scalar loss values across training iterations into separate lists for each loss term.
+# Initializes storage if needed and appends current batch losses.
 def agg_losses(LOSSES, losses):
     if not LOSSES:
         LOSSES = [[] for _ in range(len(losses))]
     for jj, loss in enumerate(losses):
         LOSSES[jj].append(loss.item())
     return LOSSES
-
+# Logs the average values of tracked training losses for the current epoch.
+# Returns the first loss as a scalar for further tracking or early stopping.
 def log_losses(epoch, losses_tr, names):
     losses_avg_tr = []
 

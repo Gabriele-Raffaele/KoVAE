@@ -1,2 +1,3 @@
 scorporare data inizio e data fine nel dataset in colonne separate (bisogna controllare che le date non si accavallino)
 bisogna effettuare un one-hot encoding ? vedere primi lab di XAI
+convertire tutti i valori da "55,6" a 55.6 
