@@ -173,7 +173,11 @@ def main(args):
             n_sample = data['original_data'].shape[0]
             generated_data.append(model.sample_data(n_sample).detach().cpu().numpy())
     generated_data = np.vstack(generated_data)
-
+    # === SALVATAGGIO DATI GENERATI ===
+    np.save('./generated_dumarey.npy', generated_data)
+    shape = generated_data.shape  # (batch, seq_len, features)
+    flattened = generated_data.reshape(shape[0] * shape[1], shape[2])
+    np.savetxt('./generated_dumarey.csv', flattened, delimiter=',')
     logging.info("Data generation is complete")
 
     ori_data = list()
