@@ -131,7 +131,7 @@ def real_data_loading(data_name, seq_len):
     Returns:
       - datasets: preprocessed datasets.
     """
-    assert data_name in ['stock', 'energy', 'metro']
+    assert data_name in ['stock', 'energy', 'metro', 'dumarey']
 
     if data_name == 'stock':
         ori_data = np.loadtxt('./datasets/stock_data.csv', delimiter=",", skiprows=1)
@@ -139,10 +139,11 @@ def real_data_loading(data_name, seq_len):
         ori_data = np.loadtxt('./datasets/energy_data.csv', delimiter=",", skiprows=1)
     elif data_name == 'metro':
         ori_data = np.loadtxt('./datasets/metro_data.csv', delimiter=",", skiprows=1)
+    elif data_name == 'dumarey':
+        ori_data = np.loadtxt('./datasets/dumarey_rounded_2DE.csv', delimiter=",", skiprows=1)
 
     # Flip the datasets to make chronological datasets
     ori_data = ori_data[::-1]
-    # Normalize the datasets
     ori_data = MinMaxScaler(ori_data)
 
     # Preprocess the datasets
