@@ -140,7 +140,7 @@ def real_data_loading(data_name, seq_len):
     elif data_name == 'metro':
         ori_data = np.loadtxt('./datasets/metro_data.csv', delimiter=",", skiprows=1)
     elif data_name == 'dumarey':
-        ori_data = np.loadtxt('./datasets/dumarey_rounded_2DE.csv', delimiter=",", skiprows=1)
+        ori_data = np.loadtxt('./datasets/dumarey_data.csv', delimiter=",", skiprows=1)
 
     # Flip the datasets to make chronological datasets
     ori_data = ori_data[::-1]
