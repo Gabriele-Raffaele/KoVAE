@@ -193,7 +193,7 @@ class TimeDataset_irregular(torch.utils.data.Dataset):
             if not os.path.exists(loc):
                 os.mkdir(loc)
 
-            if data_name in ['stock', 'energy']:
+            if data_name in ['stock', 'energy', 'dumarey']:
                 data = np.loadtxt(f'./datasets/{data_name}_data.csv', delimiter=",", skiprows=1)
                 data = data[::-1]
                 norm_data = MinMaxScaler(data)
