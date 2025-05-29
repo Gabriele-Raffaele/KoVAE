@@ -1,1 +1,1 @@
-
+togliere data e lasciare solo durata degli eventi ?
