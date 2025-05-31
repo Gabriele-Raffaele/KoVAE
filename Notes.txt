@@ -1,15 +1,3 @@
 TODO:
 
 
-
-
-
-aggiustare il fatto che ora c'è anche 120 di chargemode (Domandare)
-
-DONE:
-togliere tuple in cui c'è charge ma non c'è il voltaggio
-eliminare tuple in cui la macchina è ferma o non in carica (eventi relativi timestamp == end_time) ed eliminati
-gestire tuple in cui la macchina è ferma o non in carica ( timestamp != end_time) (Domandare)
-verificare la presenza di eventi in cui è in trip ma end_soc > soc
-verificare la presenza di eventi in cui è in charge ma end_soc < soc
-verificare la presenza di eventi in cui è in trip ma end_odo < odo
